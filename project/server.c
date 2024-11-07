@@ -8,6 +8,16 @@
 #include <stdlib.h>
 #include <stdbool.h>
 
+#define MSS 1012 // MSS = Maximum Segment Size (aka max length)
+typedef struct {
+	uint32_t ack;
+	uint32_t seq;
+	uint16_t length;
+	uint8_t flags;
+	uint8_t unused;
+	uint8_t payload[MSS];
+} packet;
+
 
 int make_non_blocking(int fd) {
    // Get fd flags:
@@ -53,41 +63,45 @@ int main(int argc, char *argv[]) {
     }
 
 
-    /* 4. Create buffer to store incoming data */
-    int BUF_SIZE = 1024;
-    char client_buf[BUF_SIZE];
-    struct sockaddr_in clientaddr; // Same information, but about client
-    socklen_t clientsize = sizeof(clientaddr);
+   /* 4. Create buffer to store incoming data */
+   int BUF_SIZE = 1024;
+   char client_buf[BUF_SIZE];
+   struct sockaddr_in clientaddr; // Same information, but about client
+   socklen_t clientsize = sizeof(clientaddr);
    bool client_connected = false;
 
-   // Listen for client bytes
-    while (true) {
+   // Network Loop:
+   while (true) {
+      /* 5. Listen for data from clients */
+      packet pkt = {0}; 
+      // int bytes_recvd = recvfrom(sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr*), &server_addr, &s);
       int bytes_recvd = recvfrom(sockfd, client_buf, BUF_SIZE, 
                         // socket  store data  how much
                            0, (struct sockaddr*) &clientaddr, 
                            &clientsize);
-      if (bytes_recvd > 0) {
-         // Add client:
+
+      /* 5. If first time, setup client */
+      if (bytes_recvd > 0 && !client_connected) {
          char* client_ip = inet_ntoa(clientaddr.sin_addr);
          int client_port = ntohs(clientaddr.sin_port); // Little endian
-         // Print out data
-         write(1, client_buf, bytes_recvd);
-         // go to main loop:
          client_connected = true;
-         break;
       }
-    }
-   while (true) {
-      /* 5. Listen for data from clients */
-      int bytes_recvd = recvfrom(sockfd, client_buf, BUF_SIZE, 
-                              // socket  store data  how much
-                                 0, (struct sockaddr*) &clientaddr, 
-                                 &clientsize);
-      
+
+      /* 5. Read data from client */
       if (bytes_recvd > 0) {
+         // uint32_t ack = ntohl(pkt.ack);
+         // uint32_t seq = ntohl(pkt.seq);
+         // uint16_t length = ntohs(pkt.length);
+         // uint8_t flags = pkt.flags;
+         // uint8_t unused = pkt.unused;
+         // char* payload = pkt.payload;
          write(1, client_buf, bytes_recvd);
       }
+
       /* 7. Send data back to client */
+      if (!client_connected) {
+         continue;
+      }
       char server_buf[BUF_SIZE];
       int bytes_read = read(STDIN_FILENO, server_buf, BUF_SIZE);
       if (bytes_read > 0)
