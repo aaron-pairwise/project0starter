@@ -7,20 +7,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <utils.h>
 
-
-int make_non_blocking(int fd) {
-   // Get fd flags:
-    int flags = fcntl(fd, F_GETFL, 0);
-    if (flags == -1) {
-        return -1;
-    }
-    // Set fd flag:
-    if (fcntl(fd, F_SETFL, flags | O_NONBLOCK) == -1) {
-        return -1;
-    }
-    return 0;
-}
 
 
 int main(int argc, char *argv[]) {
@@ -50,25 +38,53 @@ int main(int argc, char *argv[]) {
         return errno;
     }
 
-    /* 4. Create buffer to store incoming data */
-    int BUF_SIZE = 1024;
-    char server_buf[BUF_SIZE];
-    socklen_t serversize = sizeof(socklen_t); // Temp buffer for recvfrom API
+   /* 4. Create buffer to store incoming data */
+   int BUF_SIZE = 1024;
+   char server_buf[BUF_SIZE];
+   socklen_t serversize = sizeof(socklen_t); // Temp buffer for recvfrom API
+   int handshake_stage = 0;
+   uint32_t SEQ = 0;
 
    while(true) {
       /* 5. Listen for response from server */
-      int bytes_recvd = recvfrom(sockfd, server_buf, BUF_SIZE, 
-                              // socket  store data  how much
-                                 0, (struct sockaddr*) &serveraddr, 
-                                 &serversize);
-      if (bytes_recvd > 0) {
-         write(1, server_buf, bytes_recvd);
-      }
-      // Execution will stop here until `BUF_SIZE` is read or termination/error
-      // Error if bytes_recvd < 0 :(
-      //  if (bytes_recvd < 0) return errno;
-      // Print out data
+      // int bytes_recvd = recvfrom(sockfd, server_buf, BUF_SIZE, 
+      //                         // socket  store data  how much
+      //                            0, (struct sockaddr*) &serveraddr, 
+      //                            &serversize);
+      // if (bytes_recvd > 0) {
+      //    write(1, server_buf, bytes_recvd);
+      // }
+      packet pkt = {0}; 
+      int bytes_recvd = recvfrom(sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr*), &server_addr, &s);
 
+      /* 5. Initial Handshake */
+      if (handshake_stage < 2) {
+         if (handshake_stage == 0) {
+            /* Send a SYN packet from client */
+            packet syn_pkt = create_packet(0, get_random_seq(), 0, 0b10000000, 0, "");
+            send_packet(sockfd, syn_pkt, serveraddr);
+            handshake_stage++;
+         }
+         if (handshake_stage == 1) {
+            /* Expect a SYN-ACK packet from server */
+            packet pkt = read_packet(sockfd, serveraddr);
+            bool syn = pkt.flags & 1;
+            bool ack = (pkt.flags >> 1) & 1;
+            if (!syn || !ack) {
+               write(1, "Error: Expected syn and ack flags 1\n", 36);
+               return 1;
+            }
+            handshake_stage++;
+         }
+         if (handshake_stage == 2) {
+            /* Send an ACK packet from client */
+            packet ack_pkt = create_packet(0, get_random_seq(), 0, 0b01000000, 0, "");
+            send_packet(sockfd, ack_pkt, serveraddr);
+            handshake_stage++;
+         }
+      }
+
+      /* 5. Send data to server */
       int bytes_read = read(STDIN_FILENO, server_buf, BUF_SIZE);
       if (bytes_read > 0)
       {

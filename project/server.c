@@ -7,32 +7,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <utils.h>
 
-#define MSS 1012 // MSS = Maximum Segment Size (aka max length)
-typedef struct {
-	uint32_t ack;
-	uint32_t seq;
-	uint16_t length;
-	uint8_t flags;
-	uint8_t unused;
-	uint8_t payload[MSS];
-} packet;
-
-
-int make_non_blocking(int fd) {
-   // Get fd flags:
-    int flags = fcntl(fd, F_GETFL, 0);
-    if (flags == -1) {
-        perror("error getting fd flags");
-        return -1;
-    }
-    // Set fd flag:
-    if (fcntl(fd, F_SETFL, flags | O_NONBLOCK) == -1) {
-        perror("error setting fd flag");
-        return -1;
-    }
-    return 0;
-}
 
 int main(int argc, char *argv[]) {
    int port = atoi(argv[1]);
@@ -69,33 +45,47 @@ int main(int argc, char *argv[]) {
    struct sockaddr_in clientaddr; // Same information, but about client
    socklen_t clientsize = sizeof(clientaddr);
    bool client_connected = false;
+   int handshake_stage = 0;
+   uint32_t SEQ = 0;
 
    // Network Loop:
    while (true) {
       /* 5. Listen for data from clients */
       packet pkt = {0}; 
-      // int bytes_recvd = recvfrom(sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr*), &server_addr, &s);
-      int bytes_recvd = recvfrom(sockfd, client_buf, BUF_SIZE, 
-                        // socket  store data  how much
-                           0, (struct sockaddr*) &clientaddr, 
-                           &clientsize);
-
-      /* 5. If first time, setup client */
-      if (bytes_recvd > 0 && !client_connected) {
-         char* client_ip = inet_ntoa(clientaddr.sin_addr);
-         int client_port = ntohs(clientaddr.sin_port); // Little endian
-         client_connected = true;
+      int bytes_recvd = recvfrom(sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr*), &server_addr, &s);
+      
+      /* 5. Initial Handshake */
+      if (bytes_recvd > 0 && handshake_stage < 2) {
+         if (handshake_stage == 0) {
+            /* Expect a SYN packet from client, respond with a similar one. */
+            packet pkt = read_packet(sockfd, clientaddr);
+            bool syn = pkt.flags & 1;
+            bool ack = (pkt.flags >> 1) & 1;
+            if (!syn || ack) {
+               write(1, "Error: Expected handshake 1 flag from client 0\n", 23);
+               return 1;
+            }
+            SEQ = ntohl(pkt.seq);
+            packet syn_ack = create_packet(SEQ + 1, get_random_seq(), 0, 0b11000000, 0, "");
+            send_packet(sockfd, syn_ack, clientaddr);
+            handshake_stage++;
+            continue;
+         }
+         else if (handshake_stage == 1) {
+            /* This packet may include payload, so let it thru. */
+            handshake_stage++;
+         }
       }
 
       /* 5. Read data from client */
       if (bytes_recvd > 0) {
-         // uint32_t ack = ntohl(pkt.ack);
-         // uint32_t seq = ntohl(pkt.seq);
-         // uint16_t length = ntohs(pkt.length);
-         // uint8_t flags = pkt.flags;
-         // uint8_t unused = pkt.unused;
-         // char* payload = pkt.payload;
-         write(1, client_buf, bytes_recvd);
+         uint32_t ack = ntohl(pkt.ack);
+         uint32_t seq = ntohl(pkt.seq);
+         uint16_t length = ntohs(pkt.length);
+         uint8_t flags = pkt.flags;
+         uint8_t unused = pkt.unused;
+         char* payload = pkt.payload;
+         write(1, payload, bytes_recvd - sizeof(pkt));
       }
 
       /* 7. Send data back to client */
@@ -106,11 +96,14 @@ int main(int argc, char *argv[]) {
       int bytes_read = read(STDIN_FILENO, server_buf, BUF_SIZE);
       if (bytes_read > 0)
       {
-         int did_send = sendto(sockfd, server_buf, bytes_read,
-                               // socket  send data   how much to send
-                               0, (struct sockaddr *)&clientaddr,
-                               // flags   where to send
-                               sizeof(clientaddr));
+         packet pkt = {0};
+         pkt.ack = htonl(0);
+         pkt.seq = htonl(0);
+         pkt.length = htons(bytes_read);
+         pkt.flags = 0;
+         pkt.unused = 0;
+         memcpy(pkt.payload, server_buf, bytes_read);
+         int did_send = sendto(sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr *)&clientaddr, sizeof(clientaddr));
          if (did_send < 0)
             return errno;
       }
@@ -120,3 +113,4 @@ int main(int argc, char *argv[]) {
     close(sockfd);
     return 0;
 }
+
