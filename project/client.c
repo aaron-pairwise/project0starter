@@ -45,16 +45,6 @@ int main(int argc, char *argv[]) {
     int SEND_PORT = port;
     serveraddr.sin_port = htons(SEND_PORT); // Big endian
 
-    /* 3. Send data to server */
-   //  char client_buf[] = "Hello world!";
-   // char client_buf[1024];
-   // int did_send = sendto(sockfd, client_buf, strlen(client_buf), 
-   //                     // socket  send data   how much to send
-   //                        0, (struct sockaddr*) &serveraddr, 
-   //                     // flags   where to send
-   //                        sizeof(serveraddr));
-   //  if (did_send < 0) return errno;
-
    // Make socket and input non-blocking:
     if (make_non_blocking(sockfd) < 0 || make_non_blocking(STDIN_FILENO) < 0) {
         return errno;

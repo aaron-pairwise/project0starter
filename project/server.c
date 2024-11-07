@@ -89,11 +89,6 @@ int main(int argc, char *argv[]) {
       }
       /* 7. Send data back to client */
       char server_buf[BUF_SIZE];
-      //    int did_send = sendto(sockfd, server_buf, strlen(server_buf), 
-      //                      // socket  send data   how much to send
-      //                         0, (struct sockaddr*) &clientaddr, 
-      //                      // flags   where to send
-      //                         sizeof(clientaddr));
       int bytes_read = read(STDIN_FILENO, server_buf, BUF_SIZE);
       if (bytes_read > 0)
       {

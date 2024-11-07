@@ -4,3 +4,6 @@ project/*.out
 *.zip
 project/project
 results
+project/client.bin
+project/server.bin
+test.bin
