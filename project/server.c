@@ -58,7 +58,6 @@ int main(int argc, char *argv[]) {
       if (bytes_recvd > 0 && handshake_stage < 2) {
          if (handshake_stage == 0) {
             /* Expect a SYN packet from client, respond with a similar one. */
-            packet pkt = read_packet(sockfd, clientaddr);
             bool syn = pkt.flags & 1;
             bool ack = (pkt.flags >> 1) & 1;
             if (!syn || ack) {

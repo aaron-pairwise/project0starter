@@ -45,15 +45,9 @@ int main(int argc, char *argv[]) {
    int handshake_stage = 0;
    uint32_t SEQ = 0;
 
+
    while(true) {
       /* 5. Listen for response from server */
-      // int bytes_recvd = recvfrom(sockfd, server_buf, BUF_SIZE, 
-      //                         // socket  store data  how much
-      //                            0, (struct sockaddr*) &serveraddr, 
-      //                            &serversize);
-      // if (bytes_recvd > 0) {
-      //    write(1, server_buf, bytes_recvd);
-      // }
       packet pkt = {0}; 
       int bytes_recvd = recvfrom(sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr*), &server_addr, &s);
 
@@ -61,24 +55,32 @@ int main(int argc, char *argv[]) {
       if (handshake_stage < 2) {
          if (handshake_stage == 0) {
             /* Send a SYN packet from client */
-            packet syn_pkt = create_packet(0, get_random_seq(), 0, 0b10000000, 0, "");
+            SEQ = get_random_seq();
+            packet syn_pkt = create_packet(0, SEQ, 0, 0b10000000, 0, "");
             send_packet(sockfd, syn_pkt, serveraddr);
             handshake_stage++;
          }
          if (handshake_stage == 1) {
             /* Expect a SYN-ACK packet from server */
-            packet pkt = read_packet(sockfd, serveraddr);
+            if (bytes_recvd <= 0) {
+               continue;
+            }
             bool syn = pkt.flags & 1;
             bool ack = (pkt.flags >> 1) & 1;
             if (!syn || !ack) {
                write(1, "Error: Expected syn and ack flags 1\n", 36);
                return 1;
             }
+            if (pkt.ack != SEQ + 1) {
+               write(1, "Error: Expected Ack for SEQ + 1\n", 24);
+               return 1;
+            }
+            SEQ = pkt.ack;
             handshake_stage++;
          }
          if (handshake_stage == 2) {
             /* Send an ACK packet from client */
-            packet ack_pkt = create_packet(0, get_random_seq(), 0, 0b01000000, 0, "");
+            packet ack_pkt = create_packet(SEQ, SEQ, 0, 0b01000000, 0, "");
             send_packet(sockfd, ack_pkt, serveraddr);
             handshake_stage++;
          }
