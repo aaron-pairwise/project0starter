@@ -12,35 +12,24 @@
 
 
 int main(int argc, char *argv[]) {
+   /* Setup Stuff */
    char* hostname = argv[1];
    int port = atoi(argv[2]);
-
-   /* 1. Create socket */
    int sockfd = socket(AF_INET, SOCK_DGRAM, 0);
-                  // use IPv4  use UDP
-
-   /* 2. Construct server address */
    struct sockaddr_in serveraddr;
    serveraddr.sin_family = AF_INET; // use IPv4
-   //  serveraddr.sin_addr.s_addr = INADDR_ANY;
-   // Check for localhost
    if (strcmp(hostname, "localhost") == 0)
       serveraddr.sin_addr.s_addr = inet_addr("127.0.0.1");
    else
       serveraddr.sin_addr.s_addr = inet_addr(hostname);
-
-    // Set sending port
-    int SEND_PORT = port;
-    serveraddr.sin_port = htons(SEND_PORT); // Big endian
-
-   // Make socket and input non-blocking:
-    if (make_non_blocking(sockfd) < 0 || make_non_blocking(STDIN_FILENO) < 0) {
+   int SEND_PORT = port;
+   serveraddr.sin_port = htons(SEND_PORT); // Big endian
+   if (make_non_blocking(sockfd) < 0 || make_non_blocking(STDIN_FILENO) < 0) {
         return errno;
-    }
+   }
 
-   /* 4. Create buffer to store incoming data */
+   /* 4. Network State */
    int BUF_SIZE = 1024;
-   char server_buf[BUF_SIZE];
    socklen_t serversize = sizeof(socklen_t); // Temp buffer for recvfrom API
    int handshake_stage = 0;
    uint32_t SEQ = 0;
@@ -75,7 +64,7 @@ int main(int argc, char *argv[]) {
                write(1, "Error: Expected Ack for SEQ + 1\n", 24);
                return 1;
             }
-            SEQ = pkt.ack;
+            SEQ = ntohl(pkt.ack);
             handshake_stage++;
          }
          if (handshake_stage == 2) {
@@ -86,15 +75,23 @@ int main(int argc, char *argv[]) {
          }
       }
 
+      /* 5. Read data from server */
+      if (bytes_recvd > 0) {
+         uint32_t ack = ntohl(pkt.ack);
+         uint32_t seq = ntohl(pkt.seq);
+         uint16_t length = ntohs(pkt.length);
+         uint8_t flags = pkt.flags;
+         uint8_t unused = pkt.unused;
+         write(1, payload, length);
+      }
+
       /* 5. Send data to server */
+      char server_buf[BUF_SIZE];
       int bytes_read = read(STDIN_FILENO, server_buf, BUF_SIZE);
       if (bytes_read > 0)
       {
-         int did_send = sendto(sockfd, server_buf, bytes_read,
-                               // socket  send data   how much to send
-                               0, (struct sockaddr *)&serveraddr,
-                               // flags   where to send
-                               sizeof(serveraddr));
+         packet pkt = create_packet(0, 0, bytes_read, 0, 0, server_buf);
+         int did_send = send_packet(sockfd, pkt, serveraddr);
          if (did_send < 0)
             return errno;
       }

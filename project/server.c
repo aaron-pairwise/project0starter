@@ -61,7 +61,7 @@ int main(int argc, char *argv[]) {
             bool syn = pkt.flags & 1;
             bool ack = (pkt.flags >> 1) & 1;
             if (!syn || ack) {
-               write(1, "Error: Expected handshake 1 flag from client 0\n", 23);
+               write(1, "Error: Unexpected handshake 1 flag from client 0\n", 23);
                return 1;
             }
             SEQ = ntohl(pkt.seq);
@@ -84,7 +84,7 @@ int main(int argc, char *argv[]) {
          uint8_t flags = pkt.flags;
          uint8_t unused = pkt.unused;
          char* payload = pkt.payload;
-         write(1, payload, bytes_recvd - sizeof(pkt));
+         write(1, payload, length);
       }
 
       /* 7. Send data back to client */
@@ -95,14 +95,8 @@ int main(int argc, char *argv[]) {
       int bytes_read = read(STDIN_FILENO, server_buf, BUF_SIZE);
       if (bytes_read > 0)
       {
-         packet pkt = {0};
-         pkt.ack = htonl(0);
-         pkt.seq = htonl(0);
-         pkt.length = htons(bytes_read);
-         pkt.flags = 0;
-         pkt.unused = 0;
-         memcpy(pkt.payload, server_buf, bytes_read);
-         int did_send = sendto(sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr *)&clientaddr, sizeof(clientaddr));
+         packet pkt = create_packet(0, 0, bytes_read, 0, 0, server_buf);
+         int did_send = send_packet(sockfd, pkt, clientaddr);
          if (did_send < 0)
             return errno;
       }
