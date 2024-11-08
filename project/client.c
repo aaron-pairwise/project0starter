@@ -9,8 +9,6 @@
 #include <stdbool.h>
 #include <utils.h>
 
-
-
 int main(int argc, char *argv[]) {
    /* Setup Stuff */
    char* hostname = argv[1];
@@ -30,53 +28,40 @@ int main(int argc, char *argv[]) {
 
    /* 4. Network State */
    int BUF_SIZE = 1024;
-   socklen_t serversize = sizeof(socklen_t); // Temp buffer for recvfrom API
-   int handshake_stage = 0;
    uint32_t SEQ = 0;
-
+   packet send_buffer[20];
+   int send_buffer_size = 0;
+   packet recieve_buffer[20];
+   int recieve_buffer_size = 0;
 
    while(true) {
-      /* 5. Listen for response from server */
+      /* 5. Get packets from server */
       packet pkt = {0}; 
       int bytes_recvd = recvfrom(sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr*), &server_addr, &s);
 
-      /* 5. Initial Handshake */
-      if (handshake_stage < 2) {
-         if (handshake_stage == 0) {
-            /* Send a SYN packet from client */
-            SEQ = get_random_seq();
-            packet syn_pkt = create_packet(0, SEQ, 0, 0b10000000, 0, "");
-            send_packet(sockfd, syn_pkt, serveraddr);
-            handshake_stage++;
-         }
-         if (handshake_stage == 1) {
-            /* Expect a SYN-ACK packet from server */
-            if (bytes_recvd <= 0) {
-               continue;
-            }
-            bool syn = pkt.flags & 1;
-            bool ack = (pkt.flags >> 1) & 1;
-            if (!syn || !ack) {
-               write(1, "Error: Expected syn and ack flags 1\n", 36);
-               return 1;
-            }
-            if (pkt.ack != SEQ + 1) {
-               write(1, "Error: Expected Ack for SEQ + 1\n", 24);
-               return 1;
-            }
-            SEQ = ntohl(pkt.ack);
-            handshake_stage++;
-         }
-         if (handshake_stage == 2) {
-            /* Send an ACK packet from client */
-            packet ack_pkt = create_packet(SEQ, SEQ, 0, 0b01000000, 0, "");
-            send_packet(sockfd, ack_pkt, serveraddr);
-            handshake_stage++;
-         }
-      }
-
       /* 5. Read data from server */
       if (bytes_recvd > 0) {
+         bool isAckPacket = (pkt.flags >> 1) & 1;
+         if (isAckPacket) {
+            uint32_t ack = ntohl(pkt.ack);
+            for (int i = 0; i < send_buffer_size; i++) {
+               if (ntohl(send_buffer[i].seq) == ack) {
+                  send_buffer[i] = send_buffer[send_buffer_size - 1];
+                  send_buffer_size--;
+                  break;
+               }
+            }
+         }
+         else {
+            recieve_buffer[recieve_buffer_size] = pkt;
+            recieve_buffer_size++;
+            packet ack_pkt = create_packet(1, ntohl(pkt.seq), 0, 0, 0, "");
+            send_packet(sockfd, ack_pkt, serveraddr);
+
+         }
+
+
+
          uint32_t ack = ntohl(pkt.ack);
          uint32_t seq = ntohl(pkt.seq);
          uint16_t length = ntohs(pkt.length);
