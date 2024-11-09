@@ -43,19 +43,31 @@ int main(int argc, char *argv[]) {
       if (bytes_recvd > 0) {
          bool isAckPacket = (pkt.flags >> 1) & 1;
          if (isAckPacket) {
+            // Remove all packets from send_buffer that have been acked:
             uint32_t ack = ntohl(pkt.ack);
             for (int i = 0; i < send_buffer_size; i++) {
-               if (ntohl(send_buffer[i].seq) == ack) {
+               if (ntohl(send_buffer[i].seq) <= ack) {
                   send_buffer[i] = send_buffer[send_buffer_size - 1];
                   send_buffer_size--;
-                  break;
                }
             }
          }
-         else {
+         else if (recieve_buffer_size <= 20){
+            // Add to recieve buffer:
             recieve_buffer[recieve_buffer_size] = pkt;
             recieve_buffer_size++;
-            packet ack_pkt = create_packet(1, ntohl(pkt.seq), 0, 0, 0, "");
+            // Look through recieve_buffer for packets in order:
+            for (int i = 0; i < recieve_buffer_size; i++) {
+               if (ntohl(recieve_buffer[i].seq) == SEQ) {
+                  write(1, recieve_buffer[i].payload, ntohs(recieve_buffer[i].length));
+                  SEQ++;
+               }
+               else {
+                  break;
+               }
+            }
+            // Acknowledge the last packet we recieved in order:
+            packet ack_pkt = create_packet(1, SEQ, 0, 0, 0, "");
             send_packet(sockfd, ack_pkt, serveraddr);
 
          }
