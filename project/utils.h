@@ -4,6 +4,8 @@
 
 // Define your structs
 #define MSS 1012 // MSS = Maximum Segment Size (aka max length)
+#define WINDOW_SIZE 20
+#define FILE_BUF_SIZE 1024
 typedef struct {
 	uint32_t ack;
 	uint32_t seq;

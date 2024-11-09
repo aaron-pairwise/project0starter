@@ -40,5 +40,5 @@ int send_packet(int sockfd, packet pkt, struct sockaddr_in addr) {
    return sendto(sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr *)&addr, sizeof(addr));
 }
 uint32_t get_random_seq() {
-   return rand();
+   return rand() % (UINT32_MAX / 2 + 1);
 }
