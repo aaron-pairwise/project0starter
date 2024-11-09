@@ -1,9 +1,16 @@
 // utils.c
 #include "utils.h"
 #include <stdint.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <errno.h>
 #include <fcntl.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/socket.h>
+#include <unistd.h>
+#include <stdbool.h>
+
 
 // Makes a file descriptor non-blocking
 int make_non_blocking(int fd) {

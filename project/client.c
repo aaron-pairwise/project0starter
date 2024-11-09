@@ -1,27 +1,29 @@
-#include <sys/socket.h>
+#include "utils.h"
+#include <stdint.h>
 #include <arpa/inet.h>
-#include <string.h>
-#include <unistd.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+#include <sys/socket.h>
+#include <unistd.h>
 #include <stdbool.h>
-#include <utils.h>
 
 int main(int argc, char *argv[]) {
    /* Setup Stuff */
    char* hostname = argv[1];
    int port = atoi(argv[2]);
    int sockfd = socket(AF_INET, SOCK_DGRAM, 0);
-   struct sockaddr_in serveraddr;
-   serveraddr.sin_family = AF_INET; // use IPv4
+   struct sockaddr_in servaddr;
+   socklen_t s = sizeof(struct sockaddr_in);
+   servaddr.sin_family = AF_INET; // use IPv4
    if (strcmp(hostname, "localhost") == 0)
-      serveraddr.sin_addr.s_addr = inet_addr("127.0.0.1");
+      servaddr.sin_addr.s_addr = inet_addr("127.0.0.1");
    else
-      serveraddr.sin_addr.s_addr = inet_addr(hostname);
+      servaddr.sin_addr.s_addr = inet_addr(hostname);
    int SEND_PORT = port;
-   serveraddr.sin_port = htons(SEND_PORT); // Big endian
+   servaddr.sin_port = htons(SEND_PORT); // Big endian
    if (make_non_blocking(sockfd) < 0 || make_non_blocking(STDIN_FILENO) < 0) {
         return errno;
    }
@@ -42,7 +44,7 @@ int main(int argc, char *argv[]) {
    while(true) {
       /* 5. On Recieve */
       packet pkt = {0}; 
-      int bytes_recvd = recvfrom(sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr*), &server_addr, &s);
+      int bytes_recvd = recvfrom(sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr*) &servaddr, &s);
       if (bytes_recvd > 0) {
          bool isAck = (pkt.flags >> 1) & 1;
          if (isAck) {
@@ -79,7 +81,7 @@ int main(int argc, char *argv[]) {
             recieve_buffer_size = new_recieve_buffer_size;
             // Send ack:
             packet ack_pkt = create_packet(ACK, 0, 0, 0b01000000, 0, "");
-            send_packet(sockfd, ack_pkt, serveraddr);
+            send_packet(sockfd, ack_pkt, servaddr);
          }
       }
 
@@ -90,7 +92,7 @@ int main(int argc, char *argv[]) {
             // Send SYN packet:
             SEQ = get_random_seq();
             packet syn_pkt = create_packet(0, SEQ, 0, 0b10000000, 0, "");
-            int did_send = send_packet(sockfd, syn_pkt, serveraddr);
+            int did_send = send_packet(sockfd, syn_pkt, servaddr);
             if (did_send < 0)
                return errno;
             SEQ++;
@@ -109,7 +111,7 @@ int main(int argc, char *argv[]) {
          {
             // Send packet:
             packet pkt = create_packet(0, SEQ, bytes_read, 0, 0, server_buf);
-            int did_send = send_packet(sockfd, pkt, serveraddr);
+            int did_send = send_packet(sockfd, pkt, servaddr);
             if (did_send < 0)
                return errno;
             // Add to send buffer:
