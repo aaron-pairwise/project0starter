@@ -27,13 +27,13 @@ int main(int argc, char *argv[]) {
    }
 
    /* 4. Network State */
-   uint32_t SEQ = 0; // sequence number for outgoing packets
-   uint32_t ACK = 0; // the next packet to be recieved
+   uint32_t SEQ = CLIENT_SEQ; // sequence number for outgoing packets
+   uint32_t ACK = SERVER_SEQ + 1; // the next packet to be recieved
    packet send_buffer[WINDOW_SIZE]; // not ordered
    int send_buffer_size = 0;
    packet recieve_buffer[WINDOW_SIZE]; // ordered
    int recieve_buffer_size = 0;
-   int handshake_stage = 0;
+   int handshake_stage = 3;
    // 0 = should send packet with SEQ
    // 1 = wait for ACK packet from server
    // 2 = should send ACK packet with SEQ
