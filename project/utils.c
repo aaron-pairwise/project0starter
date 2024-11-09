@@ -28,11 +28,6 @@ int make_non_blocking(int fd) {
     return 0;
 }
 
-packet read_packet(int sockfd, struct sockaddr_in addr) {
-   packet pkt = {0};
-   recvfrom(sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr *)&addr, sizeof(addr));
-   return pkt;
-}
 packet create_packet(uint32_t ack, uint32_t seq, uint16_t length, uint8_t flags, uint8_t unused, char* payload) {
    packet pkt = {0};
    pkt.ack = htonl(ack);
