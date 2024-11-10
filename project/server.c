@@ -9,6 +9,7 @@
 #include <sys/socket.h>
 #include <unistd.h>
 #include <stdbool.h>
+#include <time.h>
 
 
 int main(int argc, char *argv[]) {
@@ -38,7 +39,12 @@ int main(int argc, char *argv[]) {
    int handshake_stage = 3;
    bool client_connected = false;
 
-   // Network Loop:
+   int dup_acks = 0;
+   uint32_t last_ack = 0;
+   time_t start_time, current_time;
+   time(&start_time);
+
+
    while(true) {
       /* 5. On Recieve */
       packet pkt = {0}; 
@@ -47,6 +53,8 @@ int main(int argc, char *argv[]) {
          client_connected = true;
          bool isAck = (pkt.flags >> 1) & 1;
          if (isAck) {
+            // Reset timer:
+            time(&start_time);
             // Remove all packets from send_buffer that have been acked:
             uint32_t ack = ntohl(pkt.ack);
             for (int i = 0; i < send_buffer_size; i++) {
@@ -55,29 +63,50 @@ int main(int argc, char *argv[]) {
                   send_buffer_size--;
                }
             }
+            // Check for duplicate acks:
+            if (ack == last_ack) {
+               dup_acks++;
+            } else {
+               last_ack = ack;
+               dup_acks = 0;
+            }
          }
          else if (recieve_buffer_size < WINDOW_SIZE) {
-            // Bubble insert packet into recieve buffer:
-            recieve_buffer[recieve_buffer_size] = pkt;
-            for (int i = recieve_buffer_size; i > 0 && ntohl(recieve_buffer[i].seq) < ntohl(recieve_buffer[i - 1].seq); i--) {
-               packet temp = recieve_buffer[i];
-               recieve_buffer[i] = recieve_buffer[i - 1];
-               recieve_buffer[i - 1] = temp;
+            // Check if packet is too old:
+            if (ntohl(pkt.seq) < ACK) {
+               continue;
             }
-            recieve_buffer_size++;
-            // Attempt flush using temp buffer:
-            packet new_recieve_buffer[WINDOW_SIZE]; // store packets that are NOT flushed
-            int new_recieve_buffer_size = 0;
+            // Check for duplicate packets:
+            bool exists = false;
             for (int i = 0; i < recieve_buffer_size; i++) {
-               if (ntohl(recieve_buffer[i].seq) == ACK) {
-                 write(1, recieve_buffer[i].payload, ntohs(recieve_buffer[i].length));
-                 ACK++;
-               } else {
-                 new_recieve_buffer[new_recieve_buffer_size++] = recieve_buffer[i];
+               if (ntohl(recieve_buffer[i].seq) == ntohl(pkt.seq)) {
+                 exists = true;
+                 break;
                }
             }
-            memcpy(recieve_buffer, new_recieve_buffer, new_recieve_buffer_size * sizeof(packet));
-            recieve_buffer_size = new_recieve_buffer_size;
+            if (!exists) {
+               // Bubble insert packet into recieve buffer:
+               recieve_buffer[recieve_buffer_size] = pkt;
+               for (int i = recieve_buffer_size; i > 0 && ntohl(recieve_buffer[i].seq) < ntohl(recieve_buffer[i - 1].seq); i--) {
+                 packet temp = recieve_buffer[i];
+                 recieve_buffer[i] = recieve_buffer[i - 1];
+                 recieve_buffer[i - 1] = temp;
+               }
+               recieve_buffer_size++;
+               // Attempt flush using temp buffer:
+               packet new_recieve_buffer[WINDOW_SIZE]; // store packets that are NOT flushed
+               int new_recieve_buffer_size = 0;
+               for (int i = 0; i < recieve_buffer_size; i++) {
+                  if (ntohl(recieve_buffer[i].seq) == ACK) {
+                  write(1, recieve_buffer[i].payload, ntohs(recieve_buffer[i].length));
+                  ACK++;
+                  } else {
+                  new_recieve_buffer[new_recieve_buffer_size++] = recieve_buffer[i];
+                  }
+               }
+               memcpy(recieve_buffer, new_recieve_buffer, new_recieve_buffer_size * sizeof(packet));
+               recieve_buffer_size = new_recieve_buffer_size;
+            }
             // Send ack:
             packet ack_pkt = create_packet(ACK, 0, 0, 0b01000000, 0, "");
             send_packet(sockfd, ack_pkt, servaddr);
@@ -100,10 +129,29 @@ int main(int argc, char *argv[]) {
       }
       else {
          // NORMAL OPERATION:
-         if (send_buffer_size >= WINDOW_SIZE || !client_connected) {
+         if (!client_connected) continue;
+
+         // Resend packets:
+         time(&current_time);
+         bool overtime = difftime(current_time, start_time) >= 1.0;
+         if (dup_acks >= 3 || overtime) {
+            // Resend first packet in send buffer (if any):
+            if (send_buffer_size > 0) {
+               packet pkt = send_buffer[0];
+               int did_send = send_packet(sockfd, pkt, servaddr);
+               if (did_send < 0)
+                  return errno;
+            }
+            // Reset time:
+            if (overtime) {
+               time(&start_time);
+            }
+         }
+
+         // Read from file:
+         if (send_buffer_size >= WINDOW_SIZE) {
             continue;
          }
-         // Read from file:
          char server_buf[FILE_BUF_SIZE];
          int bytes_read = read(STDIN_FILENO, server_buf, FILE_BUF_SIZE);
          if (bytes_read > 0)
