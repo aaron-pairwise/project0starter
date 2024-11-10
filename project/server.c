@@ -105,6 +105,7 @@ int main(int argc, char *argv[]) {
                   }
                }
                memcpy(recieve_buffer, new_recieve_buffer, new_recieve_buffer_size * sizeof(packet));
+               memset(recieve_buffer + new_recieve_buffer_size, 0, (WINDOW_SIZE - new_recieve_buffer_size) * sizeof(packet));
                recieve_buffer_size = new_recieve_buffer_size;
             }
             // Send ack:
