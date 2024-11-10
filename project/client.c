@@ -31,7 +31,7 @@ int main(int argc, char *argv[]) {
 
    /* 4. Network State */
    uint32_t SEQ = CLIENT_SEQ; // sequence number for outgoing packets
-   uint32_t ACK = SERVER_SEQ + 1; // the next packet to be recieved
+   uint32_t ACK = SERVER_SEQ; // the next packet to be recieved
    packet send_buffer[WINDOW_SIZE]; // not ordered
    int send_buffer_size = 0;
    packet recieve_buffer[WINDOW_SIZE]; // ordered
@@ -53,18 +53,33 @@ int main(int argc, char *argv[]) {
       packet pkt = {0}; 
       int bytes_recvd = recvfrom(sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr*) &servaddr, &s);
       if (bytes_recvd > 0) {
-         bool isAck = (pkt.flags >> 1) & 1;
+         print_diag(&pkt, RECV);
+         // bool isAck = (pkt.flags >> 1) & 1;
+         bool isAck = pkt.flags & 0b10;
+         fprintf(stderr, "recieved packet, isAck: \n");
          if (isAck) {
             // Reset timer:
             time(&start_time);
-            // Remove all packets from send_buffer that have been acked:
+            // // Remove all packets from send_buffer that have been acked:
+            // uint32_t ack = ntohl(pkt.ack);
+            // for (int i = 0; i < send_buffer_size; i++) {
+            //    if (ntohl(send_buffer[i].seq) <= ack) {
+            //       send_buffer[i] = send_buffer[send_buffer_size - 1];
+            //       send_buffer_size--;
+            //       i--;
+            //    }
+            // }
             uint32_t ack = ntohl(pkt.ack);
+            int new_size = 0;
+
             for (int i = 0; i < send_buffer_size; i++) {
-               if (ntohl(send_buffer[i].seq) <= ack) {
-                  send_buffer[i] = send_buffer[send_buffer_size - 1];
-                  send_buffer_size--;
+               if (ntohl(send_buffer[i].seq) > ack) {
+                  send_buffer[new_size++] = send_buffer[i];  // Retain the packet
                }
             }
+            fprintf(stderr, "Shrinking send_buffer from %d to %d\n", send_buffer_size, new_size);
+
+            send_buffer_size = new_size;  // Update buffer size after removal
             // Check for duplicate acks:
             if (ack == last_ack) {
                dup_acks++;
@@ -76,6 +91,8 @@ int main(int argc, char *argv[]) {
          else if (recieve_buffer_size < WINDOW_SIZE) {
             // Check if packet is too old:
             if (ntohl(pkt.seq) < ACK) {
+               // packet ack_pkt = create_packet(ACK, 0, 0, 0b01000000, 0, "");
+               // send_packet(sockfd, ack_pkt, servaddr);
                continue;
             }
             // Check for duplicate packets:
@@ -100,19 +117,23 @@ int main(int argc, char *argv[]) {
                int new_recieve_buffer_size = 0;
                for (int i = 0; i < recieve_buffer_size; i++) {
                   if (ntohl(recieve_buffer[i].seq) == ACK) {
-                  write(1, recieve_buffer[i].payload, ntohs(recieve_buffer[i].length));
-                  ACK++;
+                     write(1, recieve_buffer[i].payload, ntohs(recieve_buffer[i].length));
+                     fprintf(stderr, "Writing to stdout: seq %u\n", ntohl(recieve_buffer[i].seq));
+                     ACK++;
                   } else {
-                  new_recieve_buffer[new_recieve_buffer_size++] = recieve_buffer[i];
+                     new_recieve_buffer[new_recieve_buffer_size++] = recieve_buffer[i];
                   }
                }
+               memset(recieve_buffer, 0, WINDOW_SIZE * sizeof(packet));
                memcpy(recieve_buffer, new_recieve_buffer, new_recieve_buffer_size * sizeof(packet));
-               memset(recieve_buffer + new_recieve_buffer_size, 0, (WINDOW_SIZE - new_recieve_buffer_size) * sizeof(packet));
                recieve_buffer_size = new_recieve_buffer_size;
             }
             // Send ack:
-            packet ack_pkt = create_packet(ACK, 0, 0, 0b01000000, 0, "");
+            packet ack_pkt = create_packet(ACK, 0, 0, 0b10, 0, "");
+            fprintf(stderr, "Sending ack packet\n");
+            // print isAck:
             send_packet(sockfd, ack_pkt, servaddr);
+            fprintf(stderr, "rec_buf: %u, send_bug: %u\n", recieve_buffer_size, send_buffer_size);
          }
       }
 
@@ -122,7 +143,7 @@ int main(int argc, char *argv[]) {
          if (handshake_stage == 0) {
             // Send SYN packet:
             SEQ = get_random_seq();
-            packet syn_pkt = create_packet(0, SEQ, 0, 0b10000000, 0, "");
+            packet syn_pkt = create_packet(0, SEQ, 0, 0b10, 0, "");
             int did_send = send_packet(sockfd, syn_pkt, servaddr);
             if (did_send < 0)
                return errno;

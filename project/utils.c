@@ -39,8 +39,45 @@ packet create_packet(uint32_t ack, uint32_t seq, uint16_t length, uint8_t flags,
    return pkt;
 }
 int send_packet(int sockfd, packet pkt, struct sockaddr_in addr) {
+   print_diag(&pkt, SEND);
    return sendto(sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr *)&addr, sizeof(struct sockaddr_in));
 }
 uint32_t get_random_seq() {
    return rand() % (UINT32_MAX / 2 + 1);
+}
+
+
+// Diagnostic messages
+
+void print_diag(packet* pkt, int diag) {
+    switch (diag) {
+    case RECV:
+        fprintf(stderr, "RECV");
+        break;
+    case SEND:
+        fprintf(stderr, "SEND");
+        break;
+    case RTOS:
+        fprintf(stderr, "RTOS");
+        break;
+    case DUPA:
+        fprintf(stderr, "DUPS");
+        break;
+    }
+
+    bool syn = pkt->flags & 0b01;
+    bool ack = pkt->flags & 0b10;
+    fprintf(stderr, " %u ACK %u SIZE %hu FLAGS ", ntohl(pkt->seq),
+            ntohl(pkt->ack), ntohs(pkt->length));
+    if (!syn && !ack) {
+        fprintf(stderr, "NONE");
+    } else {
+        if (syn) {
+            fprintf(stderr, "SYN ");
+        }
+        if (ack) {
+            fprintf(stderr, "ACK ");
+        }
+    }
+    fprintf(stderr, "\n");
 }

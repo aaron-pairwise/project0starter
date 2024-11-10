@@ -15,7 +15,7 @@
 
 // Define your structs
 #define MSS 1012 // MSS = Maximum Segment Size (aka max length)
-#define WINDOW_SIZE 200
+#define WINDOW_SIZE 20
 // #define FILE_BUF_SIZE 1024
 #define FILE_BUF_SIZE 1012 // making it the same as MSS to avoid overflow
 #define CLIENT_SEQ 42
@@ -34,6 +34,12 @@ int make_non_blocking(int fd);
 packet create_packet(uint32_t ack, uint32_t seq, uint16_t length, uint8_t flags, uint8_t unused, char* payload);
 int send_packet(int sockfd, packet pkt, struct sockaddr_in addr);
 uint32_t get_random_seq();
+
+#define RECV 0
+#define SEND 1
+#define RTOS 2
+#define DUPA 3
+void print_diag(packet* pkt, int diag);
 
 
 #endif // UTILS_H
