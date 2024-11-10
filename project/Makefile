@@ -1,5 +1,6 @@
 CC=gcc
-CFLAGS= 
+# CFLAGS=-g -fsanitize=address
+CFLAGS=
 
 all: clean build
 

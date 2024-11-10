@@ -36,6 +36,7 @@ int main(int argc, char *argv[]) {
    packet recieve_buffer[WINDOW_SIZE]; // ordered
    int recieve_buffer_size = 0;
    int handshake_stage = 3;
+   bool client_connected = false;
 
    // Network Loop:
    while(true) {
@@ -43,6 +44,7 @@ int main(int argc, char *argv[]) {
       packet pkt = {0}; 
       int bytes_recvd = recvfrom(sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr*) &servaddr, &s);
       if (bytes_recvd > 0) {
+         client_connected = true;
          bool isAck = (pkt.flags >> 1) & 1;
          if (isAck) {
             // Remove all packets from send_buffer that have been acked:
@@ -98,7 +100,7 @@ int main(int argc, char *argv[]) {
       }
       else {
          // NORMAL OPERATION:
-         if (send_buffer_size >= WINDOW_SIZE) {
+         if (send_buffer_size >= WINDOW_SIZE || !client_connected) {
             continue;
          }
          // Read from file:

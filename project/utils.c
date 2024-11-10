@@ -39,7 +39,7 @@ packet create_packet(uint32_t ack, uint32_t seq, uint16_t length, uint8_t flags,
    return pkt;
 }
 int send_packet(int sockfd, packet pkt, struct sockaddr_in addr) {
-   return sendto(sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr *)&addr, sizeof(addr));
+   return sendto(sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr *)&addr, sizeof(struct sockaddr_in));
 }
 uint32_t get_random_seq() {
    return rand() % (UINT32_MAX / 2 + 1);
