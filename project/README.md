@@ -9,5 +9,7 @@
 - The first was that my bytes recieved would always be 1 packet less than the packets sent to my client.
 - I solved this by printing out each packet, and figuring out that the first packet was not being processed.
 - I figured out that this was due to a faulty element removal algorithm, which I fixed.
+- My second problem was that I misread the spec and thought SEQ tracks the packet number, rather than the byte number. Thus, I was incrementing it by 1 for each packet, rather than length.
+- Thanks to a campuswire post, I rewrote this logic to account for packet length.
 
 - Overall, this was a tough project, but I learned alot.
