@@ -36,7 +36,7 @@ int main(int argc, char *argv[]) {
    int send_buffer_size = 0;
    packet recieve_buffer[WINDOW_SIZE]; // ordered
    int recieve_buffer_size = 0;
-   int handshake_stage = 3;
+   int handshake_stage = 0;
    // 0 = should send packet with SEQ
    // 1 = wait for ACK packet from server
    // 2 = should send ACK packet with SEQ
@@ -49,6 +49,40 @@ int main(int argc, char *argv[]) {
 
 
    while(true) {
+      // HANDSHAKE STAGE:
+      if (handshake_stage == 0) {
+         handshake_stage++;
+         // Send SYN packet:
+         SEQ = get_random_seq();
+         packet syn_pkt = create_packet(0, SEQ, 0, 0b01, 0, "");
+         int did_send = send_packet(sockfd, syn_pkt, servaddr);
+         if (did_send < 0)
+            return errno;
+         SEQ++;
+      }
+      if (handshake_stage == 1) {
+         // Recieve SYN-ACK packet:
+         packet pkt = {0};
+         int bytes_recvd = recvfrom(sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr*) &servaddr, &s);
+         if (bytes_recvd > 0) {
+            print_diag(&pkt, RECV);
+            bool isAck = pkt.flags & 0b10;
+            bool isSyn = pkt.flags & 0b01;
+            uint32_t serverSeq = ntohl(pkt.seq);
+            if (isAck && isSyn) {
+               // Update ACK:
+               ACK = serverSeq + 1;
+               // Send ACK packet:
+               packet ack_pkt = create_packet(ACK, SEQ, 0, 0b10, 0, "");
+               int did_send = send_packet(sockfd, ack_pkt, servaddr);
+               if (did_send < 0)
+                  return errno;
+               SEQ++;
+               handshake_stage++;
+            }
+         }
+      }
+      if (handshake_stage < 2) continue;
       /* 5. On Recieve */
       packet pkt = {0}; 
       int bytes_recvd = recvfrom(sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr*) &servaddr, &s);
@@ -60,15 +94,6 @@ int main(int argc, char *argv[]) {
          if (isAck) {
             // Reset timer:
             time(&start_time);
-            // // Remove all packets from send_buffer that have been acked:
-            // uint32_t ack = ntohl(pkt.ack);
-            // for (int i = 0; i < send_buffer_size; i++) {
-            //    if (ntohl(send_buffer[i].seq) <= ack) {
-            //       send_buffer[i] = send_buffer[send_buffer_size - 1];
-            //       send_buffer_size--;
-            //       i--;
-            //    }
-            // }
             uint32_t ack = ntohl(pkt.ack);
             int new_size = 0;
 
@@ -138,7 +163,7 @@ int main(int argc, char *argv[]) {
       }
 
       /* 5. On Send */
-      if (handshake_stage < 3) {
+      if (false) {
          // HANDSHAKE STAGE:
          if (handshake_stage == 0) {
             // Send SYN packet:

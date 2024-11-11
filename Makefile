@@ -1,8 +1,8 @@
 # NOTE: Make sure you have your project files in the ./project directory
 # Will run the autograder and place the results in ./results/results.json
 
-# IMAGE=reliability-is-essential
-IMAGE=sockets-are-cool
+IMAGE=reliability-is-essential
+# IMAGE=sockets-are-cool
 
 run:
 	docker pull eado0/$(IMAGE)

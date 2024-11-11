@@ -37,7 +37,7 @@ int main(int argc, char *argv[]) {
    int send_buffer_size = 0;
    packet recieve_buffer[WINDOW_SIZE]; // ordered
    int recieve_buffer_size = 0;
-   int handshake_stage = 3;
+   int handshake_stage = 0;
    bool client_connected = false;
 
    int dup_acks = 0;
@@ -47,6 +47,42 @@ int main(int argc, char *argv[]) {
 
 
    while(true) {
+      // HANDSHAKE STAGE:
+      if (handshake_stage == 0) {
+         // Listen for SYN packet:
+         packet pkt = {0};
+         int bytes_recvd = recvfrom(sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr*) &servaddr, &s);
+         if (bytes_recvd > 0) {
+            print_diag(&pkt, RECV);
+            bool isSyn = pkt.flags & 0b01;
+            if (isSyn) {
+               // Update ACK:
+               SEQ = get_random_seq();
+               ACK = ntohl(pkt.seq) + 1;
+               // Send ACK packet:
+               packet ack_pkt = create_packet(ACK, SEQ, 0, 0b11, 0, "");
+               int did_send = send_packet(sockfd, ack_pkt, servaddr);
+               if (did_send < 0)
+                  return errno;
+               SEQ++;
+               handshake_stage++;
+            }
+         }
+      }
+      if (handshake_stage == 1) {
+         // Wait for ACK packet:
+         packet pkt = {0};
+         int bytes_recvd = recvfrom(sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr*) &servaddr, &s);
+         if (bytes_recvd > 0) {
+            print_diag(&pkt, RECV);
+            bool isAck = pkt.flags & 0b10;
+            if (isAck) {
+               // Update ACK:
+               handshake_stage++;
+            }
+         }
+      }
+      if (handshake_stage < 2) continue;
       /* 5. On Recieve */
       packet pkt = {0}; 
       int bytes_recvd = recvfrom(sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr*) &servaddr, &s);
@@ -131,7 +167,7 @@ int main(int argc, char *argv[]) {
       }
 
       /* 5. On Send */
-      if (handshake_stage < 3) {
+      if (false) {
          // HANDSHAKE STAGE:
          if (handshake_stage == 0) {
             // Send SYN packet:
