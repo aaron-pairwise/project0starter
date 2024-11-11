@@ -7,4 +7,4 @@ results
 project/client.bin
 project/server.bin
 test.bin
-error.txt
+project/error.txt
