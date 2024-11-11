@@ -38,7 +38,6 @@ int main(int argc, char *argv[]) {
    packet recieve_buffer[WINDOW_SIZE]; // ordered
    int recieve_buffer_size = 0;
    int handshake_stage = 0;
-   bool client_connected = false;
 
    int dup_acks = 0;
    uint32_t last_ack = 0;
@@ -81,6 +80,33 @@ int main(int argc, char *argv[]) {
                // Update ACK:
                handshake_stage++;
             }
+            if (true) {
+               // Bubble insert packet into recieve buffer:
+               recieve_buffer[recieve_buffer_size] = pkt;
+               for (int i = recieve_buffer_size; i > 0 && ntohl(recieve_buffer[i].seq) < ntohl(recieve_buffer[i - 1].seq); i--) {
+                 packet temp = recieve_buffer[i];
+                 recieve_buffer[i] = recieve_buffer[i - 1];
+                 recieve_buffer[i - 1] = temp;
+               }
+               recieve_buffer_size++;
+               // Attempt flush using temp buffer:
+               packet new_recieve_buffer[WINDOW_SIZE]; // store packets that are NOT flushed
+               int new_recieve_buffer_size = 0;
+               for (int i = 0; i < recieve_buffer_size; i++) {
+                  if (ntohl(recieve_buffer[i].seq) == ACK) {
+                     write(1, recieve_buffer[i].payload, ntohs(recieve_buffer[i].length));
+                     ACK += ntohs(recieve_buffer[i].length);
+                  } else {
+                     new_recieve_buffer[new_recieve_buffer_size++] = recieve_buffer[i];
+                  }
+               }
+               memset(recieve_buffer, 0, WINDOW_SIZE * sizeof(packet));
+               memcpy(recieve_buffer, new_recieve_buffer, new_recieve_buffer_size * sizeof(packet));
+               recieve_buffer_size = new_recieve_buffer_size;
+            }
+            // Send ack:
+            packet ack_pkt = create_packet(ACK, 0, 0, 0b10, 0, "");
+            send_packet(sockfd, ack_pkt, servaddr);
          }
       }
       if (handshake_stage < 2) continue;
@@ -88,7 +114,6 @@ int main(int argc, char *argv[]) {
       packet pkt = {0}; 
       int bytes_recvd = recvfrom(sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr*) &servaddr, &s);
       if (bytes_recvd > 0) {
-         client_connected = true;
          print_diag(&pkt, RECV);
          // bool isAck = (pkt.flags >> 1) & 1;
          bool isAck = pkt.flags & 0b10;
@@ -142,7 +167,7 @@ int main(int argc, char *argv[]) {
                for (int i = 0; i < recieve_buffer_size; i++) {
                   if (ntohl(recieve_buffer[i].seq) == ACK) {
                      write(1, recieve_buffer[i].payload, ntohs(recieve_buffer[i].length));
-                     ACK++;
+                     ACK += ntohs(recieve_buffer[i].length);
                   } else {
                      new_recieve_buffer[new_recieve_buffer_size++] = recieve_buffer[i];
                   }
@@ -173,7 +198,6 @@ int main(int argc, char *argv[]) {
       }
       else {
          // NORMAL OPERATION:
-         if (!client_connected) continue;
 
          // Resend packets:
          time(&current_time);
@@ -208,7 +232,7 @@ int main(int argc, char *argv[]) {
             // Add to send buffer:
             send_buffer[send_buffer_size++] = pkt;
             // Increase SEQ:
-            SEQ++;
+            SEQ += bytes_read;
          }
       }
    }

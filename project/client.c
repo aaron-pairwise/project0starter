@@ -143,7 +143,7 @@ int main(int argc, char *argv[]) {
                   if (ntohl(recieve_buffer[i].seq) == ACK) {
                      write(1, recieve_buffer[i].payload, ntohs(recieve_buffer[i].length));
                      fprintf(stderr, "Packet written with SEQ %u\n", ntohl(recieve_buffer[i].seq));
-                     ACK++;
+                     ACK += ntohs(recieve_buffer[i].length);
                   } else {
                      new_recieve_buffer[new_recieve_buffer_size++] = recieve_buffer[i];
                   }
@@ -211,7 +211,7 @@ int main(int argc, char *argv[]) {
             // Add to send buffer:
             send_buffer[send_buffer_size++] = pkt;
             // Increase SEQ:
-            SEQ++;
+            SEQ += bytes_read;
          }
       }
    }
