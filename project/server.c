@@ -74,15 +74,16 @@ int main(int argc, char *argv[]) {
          if (bytes_recvd > 0) {
             print_diag(&pkt, RECV);
             bool isAck = pkt.flags & 0b10;
-            ACK++;
             SEQ++;
             if (isAck) {
                // Update stage:
                handshake_stage++;
                // Continue if packet lenght is 0:
                if (ntohs(pkt.length) == 0) {
+                  ACK++;
                   continue;
                }
+               ACK += ntohs(pkt.length);
                // Bubble insert packet into recieve buffer:
                recieve_buffer[recieve_buffer_size] = pkt;
                for (int i = recieve_buffer_size; i > 0 && ntohl(recieve_buffer[i].seq) < ntohl(recieve_buffer[i - 1].seq); i--) {
