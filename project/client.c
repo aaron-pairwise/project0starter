@@ -97,7 +97,7 @@ int main(int argc, char *argv[]) {
             int new_size = 0;
 
             for (int i = 0; i < send_buffer_size; i++) {
-               if (ntohl(send_buffer[i].seq) > ack) {
+               if (ntohl(send_buffer[i].seq) >= ack) {
                   send_buffer[new_size++] = send_buffer[i];  // Retain the packet
                }
             }
@@ -112,7 +112,7 @@ int main(int argc, char *argv[]) {
                dup_acks = 0;
             }
          }
-         else if (recieve_buffer_size < WINDOW_SIZE) {
+         if (ntohl(pkt.length) > 0 && recieve_buffer_size < WINDOW_SIZE) {
             // Check if packet is too old:
             if (ntohl(pkt.seq) < ACK) {
                // packet ack_pkt = create_packet(ACK, 0, 0, 0b01000000, 0, "");

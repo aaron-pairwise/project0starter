@@ -77,10 +77,12 @@ int main(int argc, char *argv[]) {
             ACK++;
             SEQ++;
             if (isAck) {
-               // Update ACK:
+               // Update stage:
                handshake_stage++;
-            }
-            if (true) {
+               // Continue if packet lenght is 0:
+               if (ntohs(pkt.length) == 0) {
+                  continue;
+               }
                // Bubble insert packet into recieve buffer:
                recieve_buffer[recieve_buffer_size] = pkt;
                for (int i = recieve_buffer_size; i > 0 && ntohl(recieve_buffer[i].seq) < ntohl(recieve_buffer[i - 1].seq); i--) {
@@ -103,10 +105,11 @@ int main(int argc, char *argv[]) {
                memset(recieve_buffer, 0, WINDOW_SIZE * sizeof(packet));
                memcpy(recieve_buffer, new_recieve_buffer, new_recieve_buffer_size * sizeof(packet));
                recieve_buffer_size = new_recieve_buffer_size;
+
+               // Send ack:
+               packet ack_pkt = create_packet(ACK, 0, 0, 0b10, 0, "");
+               send_packet(sockfd, ack_pkt, servaddr);
             }
-            // Send ack:
-            packet ack_pkt = create_packet(ACK, 0, 0, 0b10, 0, "");
-            send_packet(sockfd, ack_pkt, servaddr);
          }
       }
       if (handshake_stage < 2) continue;
@@ -124,7 +127,7 @@ int main(int argc, char *argv[]) {
             uint32_t ack = ntohl(pkt.ack);
             int new_size = 0;
             for (int i = 0; i < send_buffer_size; i++) {
-               if (ntohl(send_buffer[i].seq) > ack) {
+               if (ntohl(send_buffer[i].seq) >= ack) {
                   send_buffer[new_size++] = send_buffer[i];  // Retain the packet
                }
             }
@@ -137,7 +140,7 @@ int main(int argc, char *argv[]) {
                dup_acks = 0;
             }
          }
-         else if (recieve_buffer_size < WINDOW_SIZE) {
+         if (ntohl(pkt.length) > 0 && recieve_buffer_size < WINDOW_SIZE) {
             // Check if packet is too old:
             if (ntohl(pkt.seq) < ACK) {
                // packet ack_pkt = create_packet(ACK, 0, 0, 0b01000000, 0, "");
