@@ -47,7 +47,6 @@ int main(int argc, char *argv[]) {
    time_t start_time, current_time;
    time(&start_time);
 
-
    while(true) {
       // HANDSHAKE STAGE:
       if (handshake_stage == 0) {
@@ -77,8 +76,8 @@ int main(int argc, char *argv[]) {
                int did_send = send_packet(sockfd, ack_pkt, servaddr);
                if (did_send < 0)
                   return errno;
-               SEQ++;
                handshake_stage++;
+               SEQ++;
             }
          }
       }
@@ -90,7 +89,7 @@ int main(int argc, char *argv[]) {
          print_diag(&pkt, RECV);
          // bool isAck = (pkt.flags >> 1) & 1;
          bool isAck = pkt.flags & 0b10;
-         fprintf(stderr, "recieved packet, isAck: \n");
+         fprintf(stderr, "recieved packet \n");
          if (isAck) {
             // Reset timer:
             time(&start_time);
@@ -143,7 +142,7 @@ int main(int argc, char *argv[]) {
                for (int i = 0; i < recieve_buffer_size; i++) {
                   if (ntohl(recieve_buffer[i].seq) == ACK) {
                      write(1, recieve_buffer[i].payload, ntohs(recieve_buffer[i].length));
-                     fprintf(stderr, "Writing to stdout: seq %u\n", ntohl(recieve_buffer[i].seq));
+                     fprintf(stderr, "Packet written with SEQ %u\n", ntohl(recieve_buffer[i].seq));
                      ACK++;
                   } else {
                      new_recieve_buffer[new_recieve_buffer_size++] = recieve_buffer[i];
@@ -158,7 +157,7 @@ int main(int argc, char *argv[]) {
             fprintf(stderr, "Sending ack packet\n");
             // print isAck:
             send_packet(sockfd, ack_pkt, servaddr);
-            fprintf(stderr, "rec_buf: %u, send_bug: %u\n", recieve_buffer_size, send_buffer_size);
+            fprintf(stderr, "rec_buffer: %u, send_buffer: %u\n", recieve_buffer_size, send_buffer_size);
          }
       }
 

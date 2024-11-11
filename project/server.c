@@ -64,7 +64,6 @@ int main(int argc, char *argv[]) {
                int did_send = send_packet(sockfd, ack_pkt, servaddr);
                if (did_send < 0)
                   return errno;
-               SEQ++;
                handshake_stage++;
             }
          }
@@ -76,6 +75,8 @@ int main(int argc, char *argv[]) {
          if (bytes_recvd > 0) {
             print_diag(&pkt, RECV);
             bool isAck = pkt.flags & 0b10;
+            ACK++;
+            SEQ++;
             if (isAck) {
                // Update ACK:
                handshake_stage++;
@@ -95,23 +96,13 @@ int main(int argc, char *argv[]) {
             // Reset timer:
             time(&start_time);
             // // Remove all packets from send_buffer that have been acked:
-            // uint32_t ack = ntohl(pkt.ack);
-            // for (int i = 0; i < send_buffer_size; i++) {
-            //    if (ntohl(send_buffer[i].seq) <= ack) {
-            //       send_buffer[i] = send_buffer[send_buffer_size - 1];
-            //       send_buffer_size--;
-            //       i--;
-            //    }
-            // }
             uint32_t ack = ntohl(pkt.ack);
             int new_size = 0;
-
             for (int i = 0; i < send_buffer_size; i++) {
                if (ntohl(send_buffer[i].seq) > ack) {
                   send_buffer[new_size++] = send_buffer[i];  // Retain the packet
                }
             }
-
             send_buffer_size = new_size;  // Update buffer size after removal
             // Check for duplicate acks:
             if (ack == last_ack) {
