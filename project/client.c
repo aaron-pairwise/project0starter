@@ -87,9 +87,7 @@ int main(int argc, char *argv[]) {
       int bytes_recvd = recvfrom(sockfd, &pkt, sizeof(pkt), 0, (struct sockaddr*) &servaddr, &s);
       if (bytes_recvd > 0) {
          print_diag(&pkt, RECV);
-         // bool isAck = (pkt.flags >> 1) & 1;
          bool isAck = pkt.flags & 0b10;
-         fprintf(stderr, "recieved packet \n");
          if (isAck) {
             // Reset timer:
             time(&start_time);
@@ -115,8 +113,6 @@ int main(int argc, char *argv[]) {
          if (ntohl(pkt.length) > 0 && recieve_buffer_size < WINDOW_SIZE) {
             // Check if packet is too old:
             if (ntohl(pkt.seq) < ACK) {
-               // packet ack_pkt = create_packet(ACK, 0, 0, 0b01000000, 0, "");
-               // send_packet(sockfd, ack_pkt, servaddr);
                continue;
             }
             // Check for duplicate packets:
@@ -162,57 +158,40 @@ int main(int argc, char *argv[]) {
       }
 
       /* 5. On Send */
-      if (false) {
-         // HANDSHAKE STAGE:
-         if (handshake_stage == 0) {
-            // Send SYN packet:
-            SEQ = get_random_seq();
-            packet syn_pkt = create_packet(0, SEQ, 0, 0b10, 0, "");
-            int did_send = send_packet(sockfd, syn_pkt, servaddr);
-            if (did_send < 0)
-               return errno;
-            SEQ++;
-            handshake_stage++;
-         }
-      }
-      else {
-         // NORMAL OPERATION:
-
-         // Resend packets:
-         time(&current_time);
-         bool overtime = difftime(current_time, start_time) >= 1.0;
-         if (dup_acks >= 3 || overtime) {
-            // Resend first packet in send buffer (if any):
-            if (send_buffer_size > 0) {
-               packet pkt = send_buffer[0];
-               int did_send = send_packet(sockfd, pkt, servaddr);
-               if (did_send < 0)
-                  return errno;
-            }
-            // Reset time:
-            if (overtime) {
-               time(&start_time);
-            }
-         }
-
-         // Read from file:
-         if (send_buffer_size >= WINDOW_SIZE) {
-            continue;
-         }
-         char server_buf[FILE_BUF_SIZE];
-         int bytes_read = read(STDIN_FILENO, server_buf, FILE_BUF_SIZE);
-         if (bytes_read > 0)
-         {
-            // Send packet:
-            packet pkt = create_packet(0, SEQ, bytes_read, 0, 0, server_buf);
+      // Resend packets:
+      time(&current_time);
+      bool overtime = difftime(current_time, start_time) >= 1.0;
+      if (dup_acks >= 3 || overtime) {
+         // Resend first packet in send buffer (if any):
+         if (send_buffer_size > 0) {
+            packet pkt = send_buffer[0];
             int did_send = send_packet(sockfd, pkt, servaddr);
             if (did_send < 0)
                return errno;
-            // Add to send buffer:
-            send_buffer[send_buffer_size++] = pkt;
-            // Increase SEQ:
-            SEQ += bytes_read;
          }
+         // Reset time:
+         if (overtime) {
+            time(&start_time);
+         }
+      }
+
+      // Read from file:
+      if (send_buffer_size >= WINDOW_SIZE) {
+         continue;
+      }
+      char server_buf[FILE_BUF_SIZE];
+      int bytes_read = read(STDIN_FILENO, server_buf, FILE_BUF_SIZE);
+      if (bytes_read > 0)
+      {
+         // Send packet:
+         packet pkt = create_packet(0, SEQ, bytes_read, 0, 0, server_buf);
+         int did_send = send_packet(sockfd, pkt, servaddr);
+         if (did_send < 0)
+            return errno;
+         // Add to send buffer:
+         send_buffer[send_buffer_size++] = pkt;
+         // Increase SEQ:
+         SEQ += bytes_read;
       }
    }
 
